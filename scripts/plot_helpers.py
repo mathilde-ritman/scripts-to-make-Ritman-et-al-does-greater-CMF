@@ -3,9 +3,14 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 from matplotlib.colors import ListedColormap
 import matplotlib.image as mpimg
+import matplotlib as mpl
+from matplotlib.patches import Circle
+from matplotlib.lines import Line2D
 import numpy as np
+import pandas as pd
 import xarray as xr
 import datetime
+import global3d_track as g3d
 
 ''' Functions to aid plotting '''
 
@@ -65,10 +70,12 @@ def plot_masks(ax, d, t, cmap='viridis', vmin=None, vmax=None, params={}):
     gl.right_labels = False
     gl.xlabel_style = {'size': 10}
     gl.ylabel_style = {'size': 10}
+    return ax
 
 def plot_surface(ax):
     img = mpimg.imread("/work/bb1153/b382635/data/world.200407.3x5400x2700.jpg")
     ax.imshow(img, transform=ccrs.PlateCarree())
+    return ax
 
 def plot_surface3d(ax, data, z, params={}):
     # Load background image
@@ -150,7 +157,7 @@ def make_map(ax, pdata, utc, cmap, vmax, fs):
     proj = ccrs.Robinson()
     
     # plot tropics
-    plot_masks(ax, pdata, utc, cmap=cmap, vmin=0, vmax=vmax, params=dict(add_colorbar=0))
+    ax = plot_masks(ax, pdata, utc, cmap=cmap, vmin=0, vmax=vmax, params=dict(add_colorbar=0))
     ax.set_extent((0,360,-30,30), crs=ccrs.PlateCarree())
     ax.plot([0,360],[15,15],ls='--',c='y',transform=ccrs.PlateCarree())
     ax.plot([0,360],[-15,-15],ls='--',c='y',transform=ccrs.PlateCarree())
@@ -175,6 +182,7 @@ def make_map(ax, pdata, utc, cmap, vmax, fs):
     xticks = np.linspace(*ax.get_xlim(), 9)
     xlables = np.nan_to_num(solar_time(xticks).round(0).astype(int), nan=0)
     top_ax.set_xticks(xticks, xlables)
+    return ax
 
 def prep_example_data(mask):
     # load
@@ -211,7 +219,7 @@ def make_proj(ax, data, coord='level_full', levels=[0.5], params=dict(offset=-1,
         ax.contour(X, (m.fillna(0)).astype(int), Z, levels, zdir='y', **params)
     return ax
 
-def make_example(ax, mask, utc, show_dc=1, show_dw=0, zaxis=1, haxis=1, name="", fsize=12):
+def make_example(ax, mask, utc, show_dc=1, show_dw=0, zaxis=1, haxis=1, name="", fsize=12, dpi=100):
     mask, dc, dw = prep_example_data(mask)
 
     # local time
@@ -237,9 +245,9 @@ def make_example(ax, mask, utc, show_dc=1, show_dw=0, zaxis=1, haxis=1, name="",
         ax = plot_scatter(ax, dc.sel(time=t), hue='condensate', params=dict(s=size, norm=norm, marker='s'), cmap='Blues', f=0)
     if show_dw:
         ax = plot_scatter(ax, dw.sel(time=t), hue='wa_phy', params=dict(s=size, norm=None, marker='s'), cmap='Reds', f=0)
-    date_str = d.time.dt.strftime('%b-%d').values
+    date_str = mask.time.dt.strftime('%b-%d').values
     ax.view_init(20, None)
-    ax = modify_axis(ax, dc, fsize=fs)
+    ax = modify_axis(ax, dc, fsize=fsize)
     
     # label z axis
     if zaxis:
@@ -274,6 +282,6 @@ def make_example(ax, mask, utc, show_dc=1, show_dw=0, zaxis=1, haxis=1, name="",
     
     # title
     tstr = f"{name}\n{t_local.strftime('%H:%M')} LST"
-    # ax.set_title(tstr, fontsize=fs)
     ax.set_title(None)
-    ax.text2D(0.95, 1.125, tstr, ha='center', va='top', transform=ax.transAxes, fontsize=fs,)
+    ax.text2D(0.95, 1.125, tstr, ha='center', va='top', transform=ax.transAxes, fontsize=fsize,)
+    return ax
