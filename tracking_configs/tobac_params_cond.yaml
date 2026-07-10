@@ -1,0 +1,42 @@
+# Mathilde Ritman 2025, config for performing INCUS-like cloud tracking on ICON
+
+version_name: 'frozen'
+select_data: ['cli','qg','qs']
+segment_data: ['cli','qg','qs']
+grid_spacing: 11100  # in meter (for Latitude)
+time_spacing: 900 # seconds (= 15 mins)
+dz: 300
+
+params_features: 
+  position_threshold: 'weighted_diff' # how to choose position of feature comprised of multiple pixels
+  sigma_threshold: 1 # standard deviation for intial filtering step used to smooth the feature data
+  n_erosion_threshold: 0 # number of pixels by which to erode the identified features
+  n_min_threshold: 27 # minimum number of contiguous pixels to define a feature
+  target: "maximum"
+  threshold: [0.0001, 0.0005, 0.001, 0.005, 0.01] # kg/kg - choice 1e-4
+  # threshold: [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01] # kg/kg - choice 1e-5
+  n_erosion_threshold: 0 # number of pixels by which to erode the identified features
+  vertical_coord: 'height'
+  dz: 300 # (meters) assumes constant vertical spacing
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+
+params_segmentation:
+  method: 'watershed'
+  threshold: 0.0001 # kg/kg - choice 1e-4
+  # threshold: 0.00001 # kg/kg - choice 1e-5
+  target: "maximum"
+  seed_3D_flag: 'box'
+  vertical_coord: 'height'
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+
+params_linking:
+  d_max: 100000 # set max search range (m)
+  adaptive_stop: 0.2 # was 0.2 in Ritman et al., 2026
+  adaptive_step: 0.95 # was 0.95
+  memory: 0 # [default]
+  stubs: 1 # [default is 1] minimum number of timesteps of a tracked cell to be reported
+  vertical_coord: null # must be set as None when using 'dz'
+  dz: 300 # (meters) assumes constant vertical spacing
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+  # min_h2=0, # to use for boundaries if using PBC flag for periodic boundary across longitude
+  # max_h2=3600,

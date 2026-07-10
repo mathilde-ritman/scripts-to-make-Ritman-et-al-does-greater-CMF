@@ -1,0 +1,41 @@
+# Mathilde Ritman 2025, config for performing INCUS-like cloud tracking on ICON
+
+version_name: 'updraft'
+select_data: 'wa_phy'
+segment_data: 'wa_phy'
+grid_spacing: 11100  # in meter (for Latitude)
+time_spacing: 900 # seconds (= 15 mins)
+dz: 300
+
+params_features: 
+  position_threshold: 'weighted_diff' # how to choose position of feature comprised of multiple pixels
+  sigma_threshold: 1 # standard deviation for intial filtering step used to smooth the feature data
+  n_erosion_threshold: 0 # number of pixels by which to erode the identified features
+  n_min_threshold: 8 # minimum number of contiguous pixels to define a feature
+  target: "maximum"
+  threshold: [.75,1,2,4,6,8,10,12,14] # m/s - choice used for tropics-wide experiment
+  n_erosion_threshold: 0 # number of pixels by which to erode the identified features
+  vertical_coord: 'height'
+  dz: 300 # (meters) assumes constant vertical spacing
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+
+params_segmentation:
+  method: 'watershed'
+  threshold: .75 # m/s
+  target: "maximum"
+  seed_3D_flag: 'box'
+  vertical_coord: 'height'
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+
+params_linking:
+  d_max: 22200 # set max search range (m)
+  method_linking: 'predict'
+  adaptive_stop: 0.2 # was 0.2 in Ritman et al., 2026
+  adaptive_step: 0.95 # was 0.95
+  memory: 0 # [default]
+  stubs: 1 # [default is 1] minimum number of timesteps of a tracked cell to be reported
+  vertical_coord: null # must be set as None when using 'dz'
+  dz: 300 # (meters) assumes constant vertical spacing
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+  # min_h2=0, # to use for boundaries if using PBC flag for periodic boundary across longitude
+  # max_h2=3600,
