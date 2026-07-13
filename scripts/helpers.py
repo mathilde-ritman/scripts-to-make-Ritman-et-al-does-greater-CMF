@@ -28,11 +28,15 @@ def temporal_aggregate_results(ds):
         "total_cloud_area": ds.cloud_area.sum("time").assign_attrs(long_name="Total area", units="m^2"),
         "total_CMT": (ds.core_cmt_ABH.sum(("time","core")) * time_spacings).assign_attrs(long_name="Total mass inflow", units="kg", equation=r"$\int M_c dt\,$"),
         "max_CMT": ds.core_cmt_ABH.max(("time","core")).assign_attrs(long_name="Maximum CMT", units="kg s-1", equation=r"$M_{c,max}$"),
-        "max_CMF": ds.core_cmf_max_ABH.max(("time","core")).assign_attrs(long_name="Core maximum CMF", units="kg s-1 m-2", equation=r"$(\rho w)_{max}$"),
+        "max_CMF": ds.core_cmf_max.max(("time","core")).assign_attrs(long_name="Core maximum CMF", units="kg s-1 m-2", equation=r"$(\rho w)_{max}$"),
         "max_w": ds.core_max_w.max(("time","core")).assign_attrs(long_name="Maximum updraft", units="m s-1", equation="$w$"),
         "max_Ac": (ds.core_area_ABH.max(("time","core"))).assign_attrs(long_name="Maximum core area", units="m s-1", equation="$A_c$"),
         "conv_lifetime": ds.conv_lifetime.assign_attrs(long_name="Duration of convection", units="hrs", equation="$t_c$"),
     })
+
+    for var in ds.data_vars:
+        if "hist" in var:
+            results[var] = ds[var].sum("time")
     
     return results
     
@@ -85,13 +89,13 @@ def cloud_lifecycle_results(ds):
     ds['core_rho_ABH'] = reduce_if_dim(ds.core_rho_ABH, 'mean')
     ds['core_fwc_ABH'] = reduce_if_dim(ds.core_fwc_ABH, 'mean')
     ds['core_area_ABH'] = reduce_if_dim(ds.core_area_ABH, 'sum')
-    ds['core_cmf_max_ABH'] = reduce_if_dim(ds.core_cmf_max_ABH, 'max')
     
     # choose variables to normalise in time
-    extras = ['core_cmt_ABH','core_rho_ABH','core_fwc_ABH','core_area_ABH','core_cmf_max_ABH',]
-    more_extras = [x for x in ds.data_vars if 'Apred' in x]
-    life_vars = [v for v in ds.data_vars if any(tag in v for tag in ("cloud", "anvil", "thick", "total")) and not 'hist' in v]
-    ds_life = ds[life_vars+extras+more_extras]
+    model_data = ['core_cmt_ABH','core_rho_ABH','core_fwc_ABH','core_area_ABH',]
+    model_predictions = [x for x in ds.data_vars if 'Apred' in x]
+    # general_results = [v for v in ds.data_vars if any(tag in v for tag in ("cloud", "anvil", "thick", "total")) and not 'hist' in v]
+    general_results = ['anvil_area', 'cloud_area', 'cloud_depth', 'thick_area', 'anvil_tw', 'anvil_div_max', 'anvil_depth_mu', 'anvil_rho', ]
+    ds_life = ds[model_data+model_predictions+general_results]
 
     # define new time axis
     tstep = 0.025

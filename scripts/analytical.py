@@ -11,30 +11,33 @@ time_spacings = 900 # s
 def predict_t_all(ds):
     # time varying all inputs
     D = ds.anvil_depth_mu # m
-    rho = ds.core_rho_ABH.mean('core').ffill('time') # kg m-3
+    # rho = ds.core_rho_ABH.mean('core').ffill('time') # kg m-3
+    rho = ds.anvil_rho # kg m-3
     CMT = ds.core_cmt_ABH.sum('core').fillna(0) # kg
-    A0 = ds.anvil_area.isel(time=0)
+    # A0 = ds.anvil_area.isel(time=0)
     A = (1 / (D*rho) * CMT).cumsum('time') * time_spacings # m2
-    return A + (A0 - A.isel(time=0))
+    return A# + (A0 - A.isel(time=0))
 
 def predict(ds):
     # using constant inputs
     D = ds.anvil_depth_mu.max('time') # m
-    rho = ds.core_rho_ABH.mean(('time','core')) # kg m-3
+    # rho = ds.core_rho_ABH.mean(('time','core')) # kg m-3
+    rho = ds.anvil_rho.mean('time') # kg m-3
     CMT = ds.core_cmt_ABH.max(('time','core')) # kg
-    A0 = ds.anvil_area.isel(time=0)
+    # A0 = ds.anvil_area.isel(time=0)
     A = 1 / (D*rho) * CMT.broadcast_like(ds.time).cumsum('time') * time_spacings # m2
-    return A + (A0 - A.isel(time=0))
+    return A# + (A0 - A.isel(time=0))
 
 def make_area_predictions(ds):
-    convecting = ds.core_area_ABH.max('core') > 0
     valid = ds.cloud_area > 0
+    convection_ends = ds.time.where(ds.core_area_ABH.max("core") > 0, drop=True).isel(time=-1)
+    convecting = ds.time <= convection_ends
     Apred_v1 = predict(ds)
     Apred_v2 = predict_t_all(ds)
-    result = xr.Dataset({"Apred_v1": Apred_v1.where(convecting).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", integrands="[0, $t_c$]")),
-                         'Apred_v1_cont': Apred_v1.where(valid).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", integrands="[0, 1]")),
-                         'Apred_v2': Apred_v3.where(convecting).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$", integrands="[0, $t_c$]")),
-                         'Apred_v2_cont': Apred_v3.where(valid).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$, where $t\in[0, $t_c$]$, else $\int \frac{M_c}{D\bar{\rho}}\,dt$, at $t=t_c$", integrands="[0, 1]")),
+    result = xr.Dataset({"Apred_v1": Apred_v1.where(convecting).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", period="[0, $t_c$]")),
+                         'Apred_v1_cont': Apred_v1.where(valid).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", period="[0, 1]")),
+                         'Apred_v2': Apred_v2.where(convecting).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$", period="[0, $t_c$]")),
+                         'Apred_v2_cont': Apred_v2.where(valid).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$, where $t\in[0, $t_c$]$, else $\int \frac{M_c}{D\bar{\rho}}\,dt$, at $t=t_c$", period="[0, 1]")),
                                                                              })
     for v in result.data_vars:
         result[v].attrs['long_name'] = 'Predicted area'
@@ -60,7 +63,7 @@ class Thickness:
         D_max = ds.anvil_depth_mu.max('interp_time') # maximum anvil depth
         iwc = ds.core_fwc_ABH # FWC at anvil base (t)
         iwc_init = initial_value(iwc) # initial FWC
-        iwc_max = iwc.max('interp_time') # maximum FWC
+        iwc_max = iwc.mean('interp_time') # maximum FWC
         t = ds.interp_time # time
         valid = (ds.cloud_area > 0) # valid period
         valid_c = (Ac > 0) # valid convective period
@@ -73,7 +76,7 @@ class Thickness:
         r = r_axis.where(r_axis <= rmax_t) # r(t)
                 
         # rate of decay of fwc in time
-        t_decay = (1 - t + t_conv) * tau
+        t_decay = 1 / (1-t_conv) - t / (1-t_conv) * ds.lifetime
         t_decay = xr.where(iwc>0, iwc, t_decay * iwc.ffill('interp_time'))
         
         # radial decay
@@ -81,7 +84,6 @@ class Thickness:
         rc_ext = xr.where(valid, rc_0, 0)
         if n != 0:
             r_decay = 1 - ((r-rc_ext) / (rmax_t-rc_ext))**n # decays to zero
-            # t_decay = ((n + 2) / n) * t_decay
         else:
             r_decay = (rc_ext / r)** 2 # Fabian Senf, decays from core radius independent of time
         r_decay = xr.where(rc_ext > r, 1, r_decay) # no decay at the core
