@@ -29,14 +29,16 @@ def temporal_aggregate_results(ds):
         "total_CMT": (ds.core_cmt_ABH.sum(("time","core")) * time_spacings).assign_attrs(long_name="Total mass inflow", units="kg", equation=r"$\int M_c dt\,$"),
         "max_CMT": ds.core_cmt_ABH.max(("time","core")).assign_attrs(long_name="Maximum CMT", units="kg s-1", equation=r"$M_{c,max}$"),
         "max_CMF": ds.core_cmf_max.max(("time","core")).assign_attrs(long_name="Core maximum CMF", units="kg s-1 m-2", equation=r"$(\rho w)_{max}$"),
+        "max_CMF_ABH": ds.core_cmf_max_ABH.max(("time","core")).assign_attrs(long_name="Core maximum CMF", units="kg s-1 m-2", equation=r"$(\rho w)_{max}$"),
         "max_w": ds.core_max_w.max(("time","core")).assign_attrs(long_name="Maximum updraft", units="m s-1", equation="$w$"),
+        "max_w_ABH": ds.core_mean_w_ABH.max(("time","core")).assign_attrs(long_name="Maximum updraft", units="m s-1", equation="$w$"),
         "max_Ac": (ds.core_area_ABH.max(("time","core"))).assign_attrs(long_name="Maximum core area", units="m s-1", equation="$A_c$"),
         "conv_lifetime": ds.conv_lifetime.assign_attrs(long_name="Duration of convection", units="hrs", equation="$t_c$"),
     })
 
     for var in ds.data_vars:
         if "hist" in var:
-            results[var] = ds[var].sum("time")
+            results[var] = ds[var].sum("time", keep_attrs=True)
     
     return results
     
@@ -83,17 +85,17 @@ def cloud_lifecycle_results(ds):
     ''' Normalise dataset of clouds to a shared evolution, comprising of developing, mature and decay phases. '''
     
     # aggreagte individiual cores that belong to the same cloud
-    def reduce_if_dim(da, func, dim='core'):
-        return getattr(da, func)(dim) if dim in da.dims else da
-    ds['core_cmt_ABH'] = reduce_if_dim(ds.core_cmt_ABH, 'sum')
-    ds['core_rho_ABH'] = reduce_if_dim(ds.core_rho_ABH, 'mean')
-    ds['core_fwc_ABH'] = reduce_if_dim(ds.core_fwc_ABH, 'mean')
-    ds['core_area_ABH'] = reduce_if_dim(ds.core_area_ABH, 'sum')
+    def reduce_core_dimension(da, func, dim='core'):
+        return getattr(da, func)(dim, keep_attrs=True) if dim in da.dims else da
+
+    ds['core_cmt_ABH'] = reduce_core_dimension(ds.core_cmt_ABH, 'sum')
+    ds['core_rho_ABH'] = reduce_core_dimension(ds.core_rho_ABH, 'mean')
+    ds['core_fwc_ABH'] = reduce_core_dimension(ds.core_fwc_ABH, 'mean')
+    ds['core_area_ABH'] = reduce_core_dimension(ds.core_area_ABH, 'sum')
     
     # choose variables to normalise in time
     model_data = ['core_cmt_ABH','core_rho_ABH','core_fwc_ABH','core_area_ABH',]
     model_predictions = [x for x in ds.data_vars if 'Apred' in x]
-    # general_results = [v for v in ds.data_vars if any(tag in v for tag in ("cloud", "anvil", "thick", "total")) and not 'hist' in v]
     general_results = ['anvil_area', 'cloud_area', 'cloud_depth', 'thick_area', 'anvil_tw', 'anvil_div_max', 'anvil_depth_mu', 'anvil_rho', ]
     ds_life = ds[model_data+model_predictions+general_results]
 
@@ -186,7 +188,8 @@ def cloud_lifecycle_results(ds):
         results[v].attrs = ds[v].attrs.copy()
 
     # keep intersection data
-    results = results.merge(xr.Dataset({'t_max_depth': t_max_depth, 't_max_area': t_max_area,}))
+    results = results.merge(xr.Dataset({'t_max_depth': t_max_depth.assign_attrs(long_name="time of maximum cloud depth (normalised time)", units="unitless"), 
+                                        't_max_area': t_max_area.assign_attrs(long_name="time of maximum cloud area (normalised time)", units="unitless"),}))
 
     # flag phase validity
     presence = (results.cloud_area > 0).any("interp_time")
@@ -194,6 +197,7 @@ def cloud_lifecycle_results(ds):
     valid_dev_and_mat = presence.sel(phase=["developing", "mature"]).all("phase")
     valid_all_three = valid_decay & valid_dev_and_mat
     results["lifestages_valid"] = valid_decay & valid_dev_and_mat
+    results["lifestages_valid"].attrs = dict(description="If True, the cloud lifecyle was sucessfully divided into all three lifestages with at least two data points in each.")
 
     return results
 
@@ -261,18 +265,4 @@ def evaluate_predictions(true, pred):
     r = res.rvalue # Pearson correlation coefficient
 
     return x, y, xline, yline, slope, r
-
-
-''' Existing contents. '''
-
-
-
-def ds_byintensity(ds, data, key):
-    # gives the system mean result in each intensity bucket input
-    pi = data.quantile((0,.25,.5,.75,1)).rename({'quantile':'pi'})
-    labels = ["0-25", "25-50", "50-75", "75-100"]
-    bins = pi.values
-    ds2 = ds.assign_coords({key:("system", data.data)})
-    return ds2.groupby_bins(key, bins=bins, labels=labels, include_lowest=True).mean('system').rename({key+'_bins':'bins'})
-
 

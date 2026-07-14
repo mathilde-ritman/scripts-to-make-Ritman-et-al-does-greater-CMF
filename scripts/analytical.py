@@ -11,36 +11,34 @@ time_spacings = 900 # s
 def predict_t_all(ds):
     # time varying all inputs
     D = ds.anvil_depth_mu # m
-    # rho = ds.core_rho_ABH.mean('core').ffill('time') # kg m-3
     rho = ds.anvil_rho # kg m-3
     CMT = ds.core_cmt_ABH.sum('core').fillna(0) # kg
-    # A0 = ds.anvil_area.isel(time=0)
+    A0 = ds.anvil_area.isel(time=0)
     A = (1 / (D*rho) * CMT).cumsum('time') * time_spacings # m2
-    return A# + (A0 - A.isel(time=0))
+    return A + (A0 - A.isel(time=0))
 
 def predict(ds):
     # using constant inputs
     D = ds.anvil_depth_mu.max('time') # m
-    # rho = ds.core_rho_ABH.mean(('time','core')) # kg m-3
     rho = ds.anvil_rho.mean('time') # kg m-3
     CMT = ds.core_cmt_ABH.max(('time','core')) # kg
-    # A0 = ds.anvil_area.isel(time=0)
+    A0 = ds.anvil_area.isel(time=0)
     A = 1 / (D*rho) * CMT.broadcast_like(ds.time).cumsum('time') * time_spacings # m2
-    return A# + (A0 - A.isel(time=0))
+    return A + (A0 - A.isel(time=0))
 
 def make_area_predictions(ds):
     valid = ds.cloud_area > 0
-    convection_ends = ds.time.where(ds.core_area_ABH.max("core") > 0, drop=True).isel(time=-1)
-    convecting = ds.time <= convection_ends
+    convecting = ds.core_area_ABH.max("core") > 0
     Apred_v1 = predict(ds)
     Apred_v2 = predict_t_all(ds)
-    result = xr.Dataset({"Apred_v1": Apred_v1.where(convecting).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", period="[0, $t_c$]")),
-                         'Apred_v1_cont': Apred_v1.where(valid).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", period="[0, 1]")),
-                         'Apred_v2': Apred_v2.where(convecting).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$", period="[0, $t_c$]")),
-                         'Apred_v2_cont': Apred_v2.where(valid).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$, where $t\in[0, $t_c$]$, else $\int \frac{M_c}{D\bar{\rho}}\,dt$, at $t=t_c$", period="[0, 1]")),
-                                                                             })
+    result = xr.Dataset({"Apred_v1": Apred_v1.where(convecting).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", period="$t\in(0, t_c)$")),
+                         'Apred_v1_cont': Apred_v1.where(valid).assign_attrs(dict(equation=r"$\frac{1}{D\bar{\rho}}\int M_{c,max}\,dt$", period="$t\in(0, t_{max})$")),
+                         'Apred_v2': Apred_v2.where(convecting).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$", period="$t\in(0, t_c)$")),
+                         'Apred_v2_cont': Apred_v2.where(valid).assign_attrs(dict(equation=r"$\int \frac{M_c}{D\bar{\rho}}\,dt$, where $t\in(0, t_c)$, else $\int \frac{M_c}{D\bar{\rho}}\,dt|_{t=t_c}$ where $t\in(t_c,t_{max})$", period="$t\in(0, t_{max})$")),
+                         })
     for v in result.data_vars:
-        result[v].attrs['long_name'] = 'Predicted area'
+        result[v].attrs['long_name'] = 'predicted anvil area'
+        result[v].attrs['description'] = r'prediction using anvil mean quantities, $D$ and $\bar{\rho}$, and core convective mass flux at the anvil base, $M_c$'
         result[v].attrs['units'] = 'm^2'
     return result
 

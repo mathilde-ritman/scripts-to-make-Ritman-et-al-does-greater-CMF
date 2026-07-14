@@ -40,7 +40,7 @@ def general_results(ds):
             if core_slice.core_volume.notnull().any():
                 ncores += 1
     results["ncores"] = ncores
-    results["ncores"] = results.ncores.assign_attrs(long_name="Number of convective cores", units="unitless")
+    results["ncores"] = results.ncores.assign_attrs(long_name="number of convective cores", units="unitless")
 
     if "core_volume" in ds:
         conv_mask = (ds.core_volume > 0).max("core")
@@ -51,7 +51,7 @@ def general_results(ds):
             results["conv_lifetime"] = np.nan
     else:
         results["conv_lifetime"] = np.nan
-    results["conv_lifetime"] = results.conv_lifetime.assign_attrs(long_name="Convective lifetime", units="hrs")
+    results["conv_lifetime"] = results.conv_lifetime.assign_attrs(long_name="convective lifetime", units="hrs")
 
     initial_lat = ds["lat"].where(ds.cloud_depth.isel(time=0).max("lon") > 0, drop=True).mean()
     initial_lon = ds["lon"].where(ds.cloud_depth.isel(time=0).max("lat") > 0, drop=True).mean()
@@ -62,11 +62,11 @@ def general_results(ds):
         lat=float(initial_lat),
         lon=float(initial_lon),
         method="nearest",
-    ).assign_attrs(long_name="Ocean fraction", units="unitless")
+    ).assign_attrs(long_name="ocean fraction", units="unitless")
 
     lon_hours = float(initial_lon) / 15.0
     results["TOI"] = ds.time.isel(time=0) + np.timedelta64(int(lon_hours * 3600), "s")
-    results["TOI"] = results.TOI.assign_attrs(long_name="Time of initiaion", description="local solar time")
+    results["TOI"] = results.TOI.assign_attrs(long_name="time of initiaion", description="local solar time")
 
     def assign_region(lon, lat):
         if np.isnan(lon) or np.isnan(lat):
@@ -82,13 +82,13 @@ def general_results(ds):
         return np.nan
 
     results["region"] = assign_region(float(initial_lon), float(initial_lat))
-    results["region"] = results.region.assign_attrs(long_name="Region", units="unitless")
+    results["region"] = results.region.assign_attrs(long_name="region", units="unitless")
 
     system_id = ds.system.item()
     organized = bool(df.loc[system_id, "valid_but_complex_convection"])
     isolated = bool(df.loc[system_id, "valid"])
     results["category"] = "isolated" if isolated else "organised" if organized else np.nan
-    results["category"] = results.category.assign_attrs(long_name="Category", units="unitless")
+    results["category"] = results.category.assign_attrs(long_name="category", units="unitless", description="If 'isolated' then there was no or minimal gap between the first and last convective cores (i.e., the period of active convection was relatively constrained within the cloud lifecycle)")
 
     return results
 
@@ -103,10 +103,11 @@ def thick_area_results(ds):
         dims="threshold",
         coords={"threshold": iwp_thresholds},
         name="threshold",
-    ).assign_attrs(units="kg m^-2", long_name="IWP threshold")
+    )
 
     area = ((ds["anvil_fwp"] > threshold_ds) * grid_spacing**2).sum(("lat", "lon"))
-    area = area.assign_attrs(units="m^2", long_name="Thick area")
+    area = area.assign_attrs(units="m^2", long_name="thick anvil area", description="area within the anvil exceeding the associated ice water path threshold")
+    area["threshold"] = area.threshold.assign_attrs(units="kg m^-2", long_name="ice water path threshold")
     return area.to_dataset(name="thick_area")
 
 
@@ -117,7 +118,8 @@ def anvil_base_height_results(ds):
     variables = ("core_cmt", "core_area", "core_fwc", "core_rho", "core_cmf_max", "core_mean_w")
 
     for var in variables:
-        results[f"{var}_ABH"] = ds[var].sel(level_full=ds.ABH, method="nearest")
+        da = ds[var].sel(level_full=ds.ABH, method="nearest")
+        results[f"{var}_ABH"] = da.assign_attrs(long_name=da.attrs["long_name"] + "at anvil base height", units=da.attrs["units"])
 
     results["ABH"] = ds.ABH
     return results
@@ -188,8 +190,8 @@ def water_path_histograms(ds):
             da_t = ds[v].sel(time=t)
             l_out.append(hist_1d(da_t.values, lbins))
         results[v + '_lhist'] = (('time', 'lbins'), np.stack(l_out))
-    for v in hdata:
-        results[v + '_lhist'].attrs = ds[v].attrs
+        results[v + '_lhist'] = results[v + '_lhist'].assign_attrs(long_name=ds[v].attrs["long_name"] + "histogram", units="count")
+    results["lbins"] = results["lbins"].assign_attrs(long_name="ice water path histogram bins", units="kg m-2")
     return results
 
 
