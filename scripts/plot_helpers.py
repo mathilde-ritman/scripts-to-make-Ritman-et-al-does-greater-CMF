@@ -21,7 +21,7 @@ def get_evolution(d):
     evolution = xr.concat((dev, mat, dec), dim='interp_time')
     return evolution
 
-def show_phases(ax, y=0, xvals=(.1,.45,.85), fs=12):
+def show_phases(ax, y=0, xvals=(.1,.45,.85), fs=12, show_decay=True):
     phase_ends = {'developing': 0.25, 'growing': 0.65}
     buff = 0.0125
     tparams = dict(c='grey', weight='bold', fontsize=fs-2, va='top')
@@ -30,7 +30,8 @@ def show_phases(ax, y=0, xvals=(.1,.45,.85), fs=12):
     ax.axvspan(phase_ends['growing']-buff, phase_ends['growing']+buff, **sparams)
     ax.text(xvals[0], y, "DEVELOPING", ha='center', **tparams)
     ax.text(xvals[1], y, "MATURE", ha='center', **tparams)
-    ax.text(xvals[2], y, "DECAY", ha='center', **tparams)
+    if show_decay:
+        ax.text(xvals[2], y, "DECAY", ha='center', **tparams)
     
 def annotate_arrow(ax, x0, y_lo, y_hi, x_lo=None, x_hi=None, fs=12):
     # percentage increase

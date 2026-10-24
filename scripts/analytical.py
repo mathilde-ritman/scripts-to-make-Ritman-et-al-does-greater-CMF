@@ -11,20 +11,22 @@ time_spacings = 900 # s
 def predict_t_all(ds):
     # time varying all inputs
     D = ds.anvil_depth_mu # m
-    rho = ds.anvil_rho # kg m-3
+    rho = ds.anvil_rho_mu # kg m-3
     CMT = ds.core_cmt_ABH.sum('core').fillna(0) # kg
-    A0 = ds.anvil_area.isel(time=0)
     A = (1 / (D*rho) * CMT).cumsum('time') * time_spacings # m2
-    return A + (A0 - A.isel(time=0))
+    t0 = ds.cloud_area.notnull().idxmax('time') # first time the anvil actually exists
+    A0 = ds.cloud_area.sel(time=t0)
+    return A + (A0 - A.sel(time=t0))
 
 def predict(ds):
     # using constant inputs
     D = ds.anvil_depth_mu.max('time') # m
-    rho = ds.anvil_rho.mean('time') # kg m-3
+    rho = ds.anvil_rho_mu.mean('time') # kg m-3
     CMT = ds.core_cmt_ABH.max(('time','core')) # kg
-    A0 = ds.anvil_area.isel(time=0)
     A = 1 / (D*rho) * CMT.broadcast_like(ds.time).cumsum('time') * time_spacings # m2
-    return A + (A0 - A.isel(time=0))
+    t0 = ds.cloud_area.notnull().idxmax('time') # first time the anvil actually exists
+    A0 = ds.cloud_area.sel(time=t0)
+    return A + (A0 - A.sel(time=t0))
 
 def make_area_predictions(ds):
     valid = ds.cloud_area > 0
@@ -42,8 +44,8 @@ def make_area_predictions(ds):
         result[v].attrs['units'] = 'm^2'
     return result
 
-def initial_value(da):
-    return da.sel(interp_time=da.notnull().idxmax('interp_time'))
+def initial_value(da, dim='interp_time'):
+    return da.sel({dim: da.notnull().idxmax(dim)})
 
 class Thickness:
 
