@@ -9,6 +9,7 @@ from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 import xarray as xr
+import scipy
 import datetime
 import global3d_track as g3d
 
@@ -60,7 +61,68 @@ def annotate_arrow(ax, x0, y_lo, y_hi, x_lo=None, x_hi=None, fs=12):
 
     # label
     ax.text(x0 + 0.02, 0.9 * y_hi, f"{pct:.0f}%", va="center", fontsize=fs - 2)
+
+def panel_label(ax, letter, text='', fs=12):
+    label = f"$\\mathbf{{({letter})}}$" + (f" {text}" if text else '')
+    ax.text(0.015, 0.95, label, transform=ax.transAxes, fontsize=fs, va='top')
+
+def plot_relationship(ax, x, y, scale='linear', low=0, high=100, scatter_kw=None, line_kw=None, cmap='viridis', density=True, scatter=True, line=True):
+   
+    scatter_kw = scatter_kw or {}
+    line_kw = line_kw or {}
+
+    x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+
+    mask = np.isfinite(x) & np.isfinite(y)
+    if scale == 'log':
+        mask &= (x > 0) & (y > 0)
+    x, y = x[mask], y[mask]
+
+    lo, hi = np.percentile(x, [low, high])
+    mask_pct = (x >= lo) & (x <= hi)
+    x, y = x[mask_pct], y[mask_pct]
+
+    # regression
+    if scale == 'log':
+        xr, yr = np.log10(x), np.log10(y)
+    else:
+        xr, yr = x, y
+
+    m, b, r, p, se = result = scipy.stats.linregress(xr, yr)
     
+    if scale == 'log':
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+    sc = None
+    if scatter:
+        if density:
+            density = scipy.stats.gaussian_kde(np.vstack([xr, yr]), bw_method=0.3)(np.vstack([xr, yr]))
+            density = (density - density.min()) / (density.max() - density.min())
+            order = density.argsort()
+            c = density[order]
+            x, y = x[order], y[order]
+        else:
+            c = cmap
+    
+        _scatter_kw = dict(s=5, alpha=0.6, rasterized=True, linewidths=0)
+        _scatter_kw.update(scatter_kw)
+        sc = ax.scatter(x, y, c=c, cmap=cmap, **_scatter_kw)
+
+    ln = None
+    if line:
+        x_fit = np.linspace(xr.min(), xr.max(), 200)
+        y_fit = m * x_fit + b
+        if scale == 'log':
+            x_fit, y_fit = 10**x_fit, 10**y_fit
+    
+        _line_kw = dict(c='k', lw=1.5)
+        _line_kw.update(line_kw)
+    
+        ax.plot(x_fit, y_fit, c='w', lw=_line_kw.get('lw', 1.5) + 0.5)  # white outline
+        ln = ax.plot(x_fit, y_fit, **_line_kw)[0]
+
+    return result, sc, ln
 
 ''' The below functions were used to make Figure 1 '''
     
